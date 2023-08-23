@@ -80,11 +80,6 @@ pub enum Error {
         source: nix::Error,
     },
 
-    #[snafu(display("HeedError(libcore)"))]
-    Heed {
-        source: heed::Error,
-    },
-
     #[snafu(display("InvalidData(libcore)"))]
     InvalidData,
 
@@ -185,7 +180,6 @@ impl From<Error> for nix::Error {
             Error::Util { source: _ } => nix::Error::EINVAL,
             Error::Io { source: _ } => nix::Error::EIO,
             Error::Nix { source } => source,
-            Error::Heed { source: _ } => nix::Error::EIO,
             Error::InvalidData => nix::Error::EINVAL,
             Error::NotFound { what: _ } => nix::Error::ENOENT,
             Error::Other { msg: _ } => nix::Error::EIO,

@@ -12,8 +12,6 @@
 
 use super::Reliability;
 use crate::error::*;
-use heed::types::SerdeBincode;
-use heed::{Database, Env, RoTxn, RwTxn};
 use nix::sys::stat::{self, Mode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -42,8 +40,6 @@ pub struct ReDb<K, V> {
 
     /* cache */
     cache: RefCell<HashMap<K, V>>, // the copy of db
-    add: RefCell<HashMap<K, V>>,
-    del: RefCell<HashSet<K>>,
 
     /* buffer */
     buffer: RefCell<HashMap<K, V>>, // daemon-reload or daemon-reexec will temporarily store the data here first, and finally refreshes it to db.
@@ -89,8 +85,6 @@ where
             reli: Rc::clone(relir),
             switch: RefCell::new(None),
             cache: RefCell::new(HashMap::new()),
-            add: RefCell::new(HashMap::new()),
-            del: RefCell::new(HashSet::new()),
             buffer: RefCell::new(HashMap::new()),
             name: String::from(db_name),
         }
@@ -98,11 +92,6 @@ where
 
     /// clear all data
     pub fn do_clear(&self, wtxn: &mut ReDbRwTxn) {
-        if let Ok(db) = self.open_db(wtxn) {
-            db.clear(&mut wtxn.0).expect("history.clear");
-        }
-        self.add.borrow_mut().clear();
-        self.del.borrow_mut().clear();
         // Do not clear the cache and buffer, because their data are transient.
     }
 
@@ -126,16 +115,15 @@ where
             }
             Some(false) => {
                 // remove "del" + insert "add"
-                self.del.borrow_mut().remove(&k);
-                self.add.borrow_mut().insert(k.clone(), v.clone());
 
                 // update cache
                 self.cache.borrow_mut().insert(k, v);
             }
             None => {
                 // remove "del" + insert "add"
-                self.del.borrow_mut().remove(&k);
-                self.add.borrow_mut().insert(k, v);
+
+                // update cache
+                self.cache.borrow_mut().insert(k, v);
             }
         }
     }
@@ -153,16 +141,15 @@ where
             }
             Some(false) => {
                 // remove "add" + insert "del"
-                self.add.borrow_mut().remove(k);
-                self.del.borrow_mut().insert(k.clone());
 
                 // update cache
                 self.cache.borrow_mut().remove(k);
             }
             None => {
                 // remove "add" + insert "del"
-                self.add.borrow_mut().remove(k);
-                self.del.borrow_mut().insert(k.clone());
+
+                // update cache
+                self.cache.borrow_mut().remove(k);
             }
         }
     }
@@ -201,19 +188,10 @@ where
 
     /// export changed data from cache to database
     pub fn cache_2_db(&self, wtxn: &mut ReDbRwTxn) {
-        let db = self.open_db(wtxn).unwrap();
 
         // "add" -> db.put + clear "add"
-        for (k, v) in self.add.borrow().iter() {
-            db.put(&mut wtxn.0, k, v).expect("history.put");
-        }
-        self.add.borrow_mut().clear();
 
         // "del" -> db.delete + clear "del"
-        for k in self.del.borrow().iter() {
-            db.delete(&mut wtxn.0, k).expect("history.delete");
-        }
-        self.del.borrow_mut().clear();
     }
 
     /// flush internal data to database
@@ -223,14 +201,12 @@ where
             self.do_clear(wtxn);
 
             // "buffer" -> db.put + clear "buffer"
-            let db = self.open_db(wtxn).unwrap();
+            self.cache.borrow_mut().clear();
             for (k, v) in self.buffer.borrow().iter() {
-                db.put(&mut wtxn.0, k, v).expect("history.put");
+                self.cache.borrow_mut().insert(k.clone(), v.clone());
             }
             self.buffer.borrow_mut().clear();
         } else {
-            // clear "cache" only, which is the same with db
-            self.cache.borrow_mut().clear();
         }
     }
 
@@ -241,40 +217,6 @@ where
         V: DeserializeOwned,
     {
         // clear "add" + "del" + "cache"
-        self.add.borrow_mut().clear();
-        self.del.borrow_mut().clear();
-        self.cache.borrow_mut().clear();
-
-        // db(open only) -> cache
-        if let Some(db) = self
-            .reli
-            .env()
-            .open_database::<SerdeBincode<K>, SerdeBincode<V>>(Some(&self.name))
-            .unwrap_or(None)
-        {
-            let rtxn = ReDbRoTxn::new(self.reli.env()).expect("db_2_cache.ro_txn");
-            let iter = db.iter(&rtxn.0).unwrap();
-            for entry in iter {
-                let (k, v) = entry.unwrap();
-                self.cache.borrow_mut().insert(k, v);
-            }
-        }
-    }
-
-    fn open_db(&self, wtxn: &mut ReDbRwTxn) -> Result<Database<SerdeBincode<K>, SerdeBincode<V>>> {
-        let database = self
-            .reli
-            .env()
-            .open_database(Some(&self.name))
-            .context(HeedSnafu)?;
-        if let Some(db) = database {
-            Ok(db)
-        } else {
-            self.reli
-                .env()
-                .create_database_with_txn(Some(&self.name), &mut wtxn.0)
-                .context(HeedSnafu)
-        }
     }
 
     fn switch(&self) -> Option<bool> {
@@ -283,22 +225,22 @@ where
 }
 
 /// reliability writeable transaction
-pub struct ReDbRwTxn<'e, 'p>(pub RwTxn<'e, 'p>);
+pub struct ReDbRwTxn();
 
-impl<'e, 'p> ReDbRwTxn<'e, 'p> {
+impl ReDbRwTxn {
     ///
-    pub fn new(env: &'e Env) -> heed::Result<ReDbRwTxn> {
-        env.write_txn().map(ReDbRwTxn)
+    pub fn new() -> ReDbRwTxn {
+        ReDbRwTxn {}
     }
 }
 
 /// reliability read-only transaction
-pub struct ReDbRoTxn<'e>(pub RoTxn<'e>);
+pub struct ReDbRoTxn();
 
-impl<'e> ReDbRoTxn<'e> {
+impl ReDbRoTxn {
     ///
-    pub fn new(env: &'e Env) -> heed::Result<ReDbRoTxn> {
-        env.read_txn().map(ReDbRoTxn)
+    pub fn new() -> ReDbRoTxn {
+        ReDbRoTxn {}
     }
 }
 

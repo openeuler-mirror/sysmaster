@@ -11,7 +11,6 @@
 // See the Mulan PSL v2 for more details.
 
 use super::base::{ReDbRwTxn, ReDbTable};
-use heed::Env;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -19,7 +18,6 @@ use std::rc::Rc;
 
 pub struct ReliHistory {
     // associated objects
-    env: Rc<Env>,
 
     // control
     switch: RefCell<Option<bool>>,
@@ -31,27 +29,20 @@ pub struct ReliHistory {
 impl fmt::Debug for ReliHistory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ReliHistory")
-            .field("env.path", &self.env.path())
             .field("env.dbs.len", &self.dbs.borrow().len())
             .finish()
     }
 }
 
 impl ReliHistory {
-    pub fn new(envr: &Rc<Env>) -> ReliHistory {
+    pub fn new() -> ReliHistory {
         ReliHistory {
             switch: RefCell::new(None),
-            env: Rc::clone(envr),
             dbs: RefCell::new(HashMap::new()),
         }
     }
 
     pub fn data_clear(&self) {
-        let mut db_wtxn = ReDbRwTxn::new(&self.env).expect("history.write_txn");
-        for (_, db) in self.dbs.borrow().iter() {
-            db.clear(&mut db_wtxn);
-        }
-        db_wtxn.0.commit().expect("history.commit");
     }
 
     pub fn db_register(&self, name: &str, db: Rc<dyn ReDbTable>) {
@@ -59,29 +50,16 @@ impl ReliHistory {
     }
 
     pub fn commit(&self) {
-        // create transaction
-        let mut db_wtxn = ReDbRwTxn::new(&self.env).expect("history.write_txn");
-
-        // export to db
-        for (_, db) in self.dbs.borrow().iter() {
-            db.export(&mut db_wtxn);
-        }
-
-        // commit
-        db_wtxn.0.commit().expect("history.commit");
     }
 
     pub(super) fn flush(&self, switch: bool) {
         // create transaction
-        let mut db_wtxn = ReDbRwTxn::new(&self.env).expect("history.write_txn");
+        let mut db_wtxn = ReDbRwTxn::new();
 
         // flush to db
         for (_, db) in self.dbs.borrow().iter() {
             db.flush(&mut db_wtxn, switch);
         }
-
-        // commit
-        db_wtxn.0.commit().expect("history.commit");
     }
 
     pub fn import(&self) {

@@ -14,16 +14,12 @@
 use super::debug::{self, ReliDebug};
 use super::{
     base::{RELI_DATA_FILE, RELI_DIR, RELI_INTERNAL_MAX_DBS, RELI_LOCK_FILE},
-    enable::ReliEnable,
     history::ReliHistory,
-    last::ReliLast,
-    pending::ReliPending,
     station::ReliStation,
     ReDbTable, ReStation, ReStationKind,
 };
 use crate::{error::*, rel::base};
 use basic::{do_entry_log, do_entry_or_return_io_error};
-use heed::{CompactionOption, Env, EnvOpenOptions};
 use nix::sys::stat::{self, Mode};
 use std::fmt;
 use std::fs::{self, File};
@@ -72,19 +68,15 @@ pub struct Reliability {
     debug: ReliDebug,
 
     // environment
-    env: Rc<Env>,
 
     // directory
     b_exist: bool,
     hdir: String, // home-directory
 
     // control data
-    enable: ReliEnable,
 
     // output data
-    last: ReliLast,
     history: ReliHistory,
-    pending: ReliPending,
 
     // input & recover
     station: ReliStation,
@@ -93,11 +85,7 @@ pub struct Reliability {
 impl fmt::Debug for Reliability {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Reliability")
-            .field("env.path", &self.env.path())
-            .field("enable", &self.enable)
-            .field("last", &self.last)
             .field("history", &self.history)
-            .field("pending", &self.pending)
             .field("station", &self.station)
             .finish()
     }
@@ -119,19 +107,14 @@ impl Reliability {
         let hpath = hpath_path_get(&hdir);
         let b_exist = bflag_path_get(hpath.clone()).exists();
         let path = hpath.join(subdir_cur_get(b_exist));
-        let e = Rc::new(open_env(path.clone(), conf.map_size, conf.max_dbs).expect("open env"));
         log::info!("open with path {:?} successfully.", path);
 
         let reli = Reliability {
             #[cfg(debug)]
             debug: ReliDebug::new(&hdir),
-            env: Rc::clone(&e),
             b_exist,
             hdir,
-            enable: ReliEnable::new(&e),
-            last: ReliLast::new(&e),
-            history: ReliHistory::new(&e),
-            pending: ReliPending::new(&e),
+            history: ReliHistory::new(),
             station: ReliStation::new(),
         };
         reli.debug_enable();
@@ -140,39 +123,32 @@ impl Reliability {
 
     /// set the enable flag
     pub fn set_enable(&self, enable: bool) {
-        self.enable.set_enable(enable);
     }
 
     /// set the last unit
     pub fn set_last_unit(&self, unit_id: &str) {
-        self.last.set_unit(unit_id);
     }
 
     /// clear the last unit
     pub fn clear_last_unit(&self) {
         self.history.commit();
-        self.last.clear_unit();
     }
 
     /// set the last frame
     pub fn set_last_frame(&self, f1: u32, f2: Option<u32>, f3: Option<u32>) {
-        self.last.set_frame(f1, f2, f3);
     }
 
     /// set the last frame with just one parameter
     pub fn set_last_frame1(&self, f1: u32) {
-        self.last.set_frame(f1, None, None);
     }
 
     /// set the last frame with two parameters
     pub fn set_last_frame2(&self, f1: u32, f2: u32) {
-        self.last.set_frame(f1, Some(f2), None);
     }
 
     /// clear the last frame
     pub fn clear_last_frame(&self) {
         self.history.commit();
-        self.last.clear_frame();
     }
 
     /// register history database
@@ -182,12 +158,12 @@ impl Reliability {
 
     /// set the fd's 'cloexec' flag and record it
     pub fn fd_cloexec(&self, fd: i32, cloexec: bool) -> Result<()> {
-        self.pending.fd_cloexec(fd, cloexec)
+        Ok(())
     }
 
     /// take the fd away
     pub fn fd_take(&self, fd: i32) -> i32 {
-        self.pending.fd_take(fd)
+        fd
     }
 
     /// register a station
@@ -199,7 +175,6 @@ impl Reliability {
     /// if reload is true, only map result class parameters.
     pub fn recover(&self, reload: bool) {
         // ignore last's input
-        self.last.ignore_set(true);
 
         self.history.import();
         self.input_rebuild();
@@ -208,11 +183,8 @@ impl Reliability {
         self.make_consistent(reload);
 
         // restore last's ignore
-        self.last.ignore_set(false);
 
         // clear last
-        self.last.clear_unit();
-        self.last.clear_frame();
     }
 
     /// compact the database
@@ -225,69 +197,30 @@ impl Reliability {
     }
 
     fn compact_body(&self) -> Result<()> {
-        // a -> b or b -> a
-        // prepare next
-        let hpath = hpath_path_get(&self.hdir);
-        let next_path = hpath.join(subdir_next_get(self.b_exist));
-        let next_file = next_path.join(RELI_DATA_FILE);
-
-        // clear next: delete and re-create the whole directory
-        do_entry_or_return_io_error!(fs::remove_dir_all, next_path, "remove");
-        do_entry_or_return_io_error!(fs::create_dir_all, next_path, "create");
-
-        // copy to next
-        self.env
-            .copy_to_path(next_file.clone(), CompactionOption::Disabled)
-            .context(HeedSnafu)?;
-        log::info!("compact to file {:?} successfully.", next_file);
-
-        // remark the next flag at last: the another one
-        let bflag = bflag_path_get(hpath.clone());
-        if self.b_exist {
-            do_entry_or_return_io_error!(fs::remove_file, bflag, "remove");
-        } else {
-            do_entry_or_return_io_error!(File::create, bflag, "create");
-        }
-
-        // try to clear previous: it would be done in the next re-exec, but we try to delete it as soon as possible.
-        let cur_path = hpath.join(subdir_cur_get(self.b_exist));
-        let cur_data = cur_path.join(RELI_DATA_FILE);
-        let cur_lock = cur_path.join(RELI_LOCK_FILE);
-        do_entry_log!(fs::remove_file, cur_data, "remove");
-        do_entry_log!(fs::remove_file, cur_lock, "remove");
-
         Ok(())
     }
 
     /// get the enable flag
     pub fn enable(&self) -> bool {
-        self.enable.enable()
-    }
-
-    /// get env
-    pub(super) fn env(&self) -> &Env {
-        &self.env
+        false
     }
 
     /// get the last unit
     pub fn last_unit(&self) -> Option<String> {
-        self.last.unit()
+        None
     }
 
     /// get the last frame
     pub fn last_frame(&self) -> Option<(u32, Option<u32>, Option<u32>)> {
-        self.last.frame()
+        None
     }
 
     /// clear all data
     pub fn data_clear(&self) {
         // data-only
         /* control */
-        self.enable.data_clear();
         /* output */
-        self.last.data_clear();
         self.history.data_clear();
-        self.pending.data_clear();
     }
 
     /// [repeating protection] clear all registers
@@ -298,12 +231,7 @@ impl Reliability {
 
     /// get the ignore flag of last data
     pub fn last_ignore(&self) -> bool {
-        self.last.ignore()
-    }
-
-    /// get the switch flag of history data
-    pub fn history_switch(&self) -> Option<bool> {
-        self.history.switch()
+        true
     }
 
     /// do the debug action: enable the recover process
@@ -377,7 +305,6 @@ impl Reliability {
         }
 
         // make consistent and commit
-        self.pending.make_consistent();
         self.station.make_consistent(lframe, lunit);
         self.history.commit();
 
@@ -461,25 +388,6 @@ fn reli_subdir_prepare(hdir: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn open_env(path: PathBuf, map_size: Option<usize>, max_dbs: Option<u32>) -> heed::Result<Env> {
-    let mut eoo = EnvOpenOptions::new();
-
-    // size
-    if let Some(size) = map_size {
-        eoo.map_size(size);
-    }
-
-    // dbs
-    let mut max = RELI_INTERNAL_MAX_DBS;
-    if let Some(m) = max_dbs {
-        max += m;
-    }
-    eoo.max_dbs(max);
-
-    // open
-    eoo.open(path)
 }
 
 fn subdir_next_get(b_exist: bool) -> String {
