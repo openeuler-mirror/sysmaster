@@ -1,4 +1,4 @@
-# 安装与部署
+# 安装与部署devmaster
 
 `devmaster`目前可应用于虚拟机环境，本章节介绍安装部署的规格约束以及操作流程。
 
@@ -40,7 +40,7 @@
     ```
 
     > [!NOTE]说明
-    > `devmaster`需要以 `root`权限启动，并且不能和 `udev`同时处于运行状态，启动 `devmaster`前需要停止`udev`服务。
+    > `devmaster`需要以`root`权限启动，并且不能和`udev`同时处于运行状态，启动`devmaster`前需要停止`udev`服务。
    
     要停止`udev`服务，`sysmaster`启动环境下，执行以下命令：
 
@@ -54,13 +54,13 @@
     # systemctl stop systemd-udevd.service systemd-udevd systemd-udevd-kernel.socket systemd-udevd-control.socket
     ```
 
-4. 执行如下命令，使用 `devctl`工具触发设备事件：
+4. 执行如下命令，使用`devctl`工具触发设备事件：
 
     ```shell
     # devctl trigger
     ```
 
-5. 查看 `/run/devmaster/data/`目录，如果生成设备数据库，则表示部署成功：
+5. 查看`/run/devmaster/data/`目录，如果生成设备数据库，则表示部署成功：
 
     ```shell
     # ll /run/devmaster/data/

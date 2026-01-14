@@ -1,4 +1,4 @@
-# Installation and Deployment
+# Installing and Deploying sysmaster
 
 sysmaster can be used in containers and VMs. This document uses the AArch64 architecture as an example to describe how to install and deploy sysmaster in both scenarios.
 

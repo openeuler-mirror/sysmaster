@@ -1,6 +1,6 @@
-# 安装与部署
+# 安装与部署sysmaster
 
-`sysmaster`可应用于容器和虚拟机，本文档将以 `aarch64`系统为例说明如何在各场景下进行安装与部署。
+`sysmaster`可应用于容器和虚拟机，本文档将以`aarch64`系统为例说明如何在各场景下进行安装与部署。
 
 ## 软件要求
 
@@ -75,7 +75,7 @@
 ## 虚拟机场景安装与部署
 
 1. `initramfs`镜像制作
-   为了避免 `initrd`阶段 `systemd`的影响，需要制作一个剔除 `systemd`的 `initramfs`镜像，并以该镜像进入 `initrd`流程。使用如下命令：
+   为了避免`initrd`阶段`systemd`的影响，需要制作一个剔除`systemd`的`initramfs`镜像，并以该镜像进入`initrd`流程。使用如下命令：
 
    ```bash
    dracut -f --omit "systemd systemd-initrd systemd-networkd dracut-systemd" /boot/initrd_withoutsd.img
@@ -83,7 +83,7 @@
 
 2. 新增启动项
 
-   在 `grub.cfg`中增加新的启动项，`aarch64`下的路径为 `/boot/efi/EFI/openEuler/grub.cfg`，`x86_64`下的路径为 `/boot/grub2/grub.cfg`，拷贝一份原有启动项，并做以下几处修改：
+   在`grub.cfg`中增加新的启动项，`aarch64`下的路径为`/boot/efi/EFI/openEuler/grub.cfg`，`x86_64`下的路径为`/boot/grub2/grub.cfg`，拷贝一份原有启动项，并做以下几处修改：
 
     * `menuentry` 项修改启动项名称 `openEuler (6.4.0-5.0.0.13.oe23.09.aarch64) 23.09`为 `openEuler 23.09 withoutsd`
     * `linux` 项内核启动参数修改 `root=/dev/mapper/openeuler-root ro` 为 `root=/dev/mapper/openeuler-root rw`

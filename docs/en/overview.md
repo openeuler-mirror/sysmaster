@@ -1,6 +1,4 @@
-# sysMaster User Guide
-
-## Overview
+# Introduction 
 
 sysMaster is a collection of ultra-lightweight and highly reliable service management programs. It provides an innovative implementation of PID 1 to replace the conventional init process. Written in Rust, sysMaster is equipped with fault monitoring, second-level self-recovery, and quick startup capabilities, which help improve OS reliability and service availability.
 
@@ -19,8 +17,6 @@ As shown in the figure, sysMaster consists of three components:
 ![sysMaster](./figures/sysMaster.png)
 
 **sysmaster** and **devmaster** are the two main packages of sysMaster, which are responsible for service management and device management, respectively.
-
-## Intended Audience
 
 This document is intended for openEuler users who need to manage services and devices. The users are expected to:
 
