@@ -1,4 +1,4 @@
-# sysmaster Usage Instructions
+# Using sysmaster
 
 This section provides examples on how to use sysmaster, including:
 

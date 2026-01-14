@@ -1,4 +1,4 @@
-# Installation and Deployment
+# Installing and Deploying devmaster
 
 Currently, devmaster can be used in the VM environment. This section describes the requirements and procedure of devmaster installation and deployment.
 

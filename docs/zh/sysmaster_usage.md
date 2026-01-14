@@ -1,6 +1,6 @@
-# sysmaster使用说明
+# 使用sysmaster
 
-本章主要通过一些实例来带领用户初步使用 `sysmaster`，例如:
+本章主要通过一些实例来带领用户初步使用`sysmaster`，例如：
 
 * 如何创建 `service`服务单元配置文件。
 * 如何管理单元服务，例如启动、停止、查看服务。
@@ -14,7 +14,7 @@
 当前 `sysmaster`支持 `target`、`socket`、`service`类型的单元配置文件。
 
 * `target`：封装了一个由 `sysmaster`管理的启动目标，用于将多个单元集中到一个同步点。`sysmaster`提供不同阶段的 `target`单元，例如   `multi-user.target`代表系统已完成启动，用户可以依赖此目标，启动自己的服务。
-* `socket`：封装了一个用于进程间通信的套接字 `socket`， 以支持基于套接字的启动。例如用户可以配置 `service`单元依赖此 `socket`，当此 `socket`有数据写入时，`sysmaster`会拉起对应的 `service`单元。
+* `socket`：封装了一个用于进程间通信的套接字 `socket`，以支持基于套接字的启动。例如用户可以配置 `service`单元依赖此 `socket`，当此 `socket`有数据写入时，`sysmaster`会拉起对应的 `service`单元。
 * `service`：封装了一个被 `sysmaster`监视与控制的进程。
 
 ### 单元配置文件的构成
@@ -67,11 +67,11 @@ WantedBy="multi-user.target"
 
 ## 管理单元服务
 
-`sctl`是 `sysmaster`的命令行工具，用于检查和控制 `sysmaster`服务端行为和各个服务的状态，它可以启动、停止、重启、检查系统服务。
+`sctl`是 `sysmaster`的命令行工具，用于检查和控制`sysmaster`服务端行为和各个服务的状态，它可以启动、停止、重启、检查系统服务。
 
 ### 启动服务
 
-使用以下命令可以启动 `sshd`服务和运行 `ExecStart`所配置的命令。
+使用以下命令可以启动`sshd`服务和运行`ExecStart`所配置的命令。
 
 ```bash
 sctl start sshd.service
@@ -79,7 +79,7 @@ sctl start sshd.service
 
 ### 停止服务
 
-使用以下命令可以停止 `sshd`服务，杀死 `ExecStart`所运行的进程。
+使用以下命令可以停止 `sshd`服务，杀死`ExecStart`所运行的进程。
 
 ```bash
 sctl stop sshd.service

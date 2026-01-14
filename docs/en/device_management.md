@@ -1,4 +1,4 @@
-# Device Management
+# Introduction to devmaster
 
 The device manager is a bridge between user-mode software and underlying physical devices, supporting the operation of key base software such as lvm2 and NetworkManager. As the device management component of sysMaster, devmaster supports quick startup of sysMaster and ecosystem compatibility of user-mode software. In addition, devmaster provides layered, decoupled, and scalable device management capabilities for common OSs based on the summary and contemplation of mainstream Linux device management solutions.
 

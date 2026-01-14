@@ -1,4 +1,4 @@
-# Usage Instructions
+# Using devmaster
 
 This section describes how to use devmaster, covering daemon configuration, client tool, rule usage, and NIC configuration.
 

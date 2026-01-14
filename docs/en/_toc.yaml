@@ -1,19 +1,22 @@
 label: sysMaster User Guide
 isManual: true
-href: ./overview.md
 description: Server and device management using sysMaster
 sections:
+  - label: Introduction
+    href: ./overview.md
   - label: Service Management
-    href: ./service_management.md
     sections:
-      - label: Installation and Deployment
+      - label: Introduction to sysmaster
+        href: ./service_management.md
+      - label: Installing and Deploying sysmaster
         href: ./sysmaster_install_deploy.md
-      - label: Usage Instructions
+      - label: Using sysmaster
         href: ./sysmaster_usage.md
   - label: Device Management
-    href: ./device_management.md
     sections:
-      - label: Installation and Deployment
+      - label: Introduction to devmaster
+        href: ./device_management.md
+      - label: Installing and Deploying devmaster
         href: ./devmaster_install_deploy.md
-      - label: Usage Instructions
+      - label: Using devmaster
         href: ./devmaster_usage.md
