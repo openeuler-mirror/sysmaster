@@ -50,7 +50,7 @@ pub enum CgType {
     None,
     /// cgroup v1 mounted to /sys/fs/cgroup/sysmaster
     Legacy,
-    /// cgroup v2 mounted to /sys/fs/cgroup/unifed
+    /// cgroup v2 mounted to /sys/fs/cgroup/unified
     UnifiedV1,
     /// cgroup v2 mounted to /sys/fs/cgroup/
     UnifiedV2,

@@ -1,42 +1,108 @@
 #!/usr/bin/env bash
+# Common functions for CI scripts
 export rust_vendor="1.57.0"
 
-function test_fasturl()
-{
-    set +e
-    # Initialize minimum latency to a large value
-    min_latency=9999999
-    timeout=10
-    # Define the fastest source
-    fastest_source=""
+# Detect OS distribution and return OS ID
+detect_os() {
+    if [[ -f /etc/os-release ]]; then
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        echo "$ID"
+    else
+        echo "unknown"
+    fi
+}
 
+# Install packages with auto-detection of package manager
+install_packages() {
+    local pkgs=("$@")
+    local missing=()
+
+    # Check which packages are missing
+    for pkg in "${pkgs[@]}"; do
+        rpm -qi "$pkg" &>/dev/null || missing+=("$pkg")
+    done
+
+    # All packages already installed
+    if [[ ${#missing[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # Detect OS and install using appropriate package manager
+    local os_id
+    os_id=$(detect_os)
+
+    case "$os_id" in
+        fedora|rhel|centos)
+            sudo dnf install -y "${missing[@]}"
+            ;;
+        openeuler)
+            sudo sed -i 's:repo.openeuler.org:repo.huaweicloud.com/openeuler:g' /etc/yum.repos.d/*.repo
+            sudo yum install --refresh -y "${missing[@]}"
+            ;;
+        *)
+            echo "Error: Unsupported distribution: $os_id" >&2
+            return 1
+            ;;
+    esac
+}
+
+# Test multiple URLs and return the fastest one
+test_fasturl() {
+    set +e
+    local min_latency=9999999
+    local timeout=10
+    local fastest_source=""
     local urls=("$@")
 
-    # Test each crate
+    # Test each URL
     for url in "${urls[@]}"; do
-        # Send an HTTP request to get crate information and measure the execution time
+        # Measure request time
         start_time=$(date +%s%N)
-        response=$(curl -s -o /dev/null --connect-timeout 1 -m 10 -w "%{time_total}" "$url" > /dev/null 2>&1)
-        if [ $? -ne 0 ]; then
+        curl -s -o /dev/null --connect-timeout 1 -m 10 -w "%{time_total}" "$url" &>/dev/null
+        local exit_status=$?
+        end_time=$(date +%s%N)
+
+        if [[ $exit_status -ne 0 ]]; then
             continue
         fi
-        end_time=$(date +%s%N)
-        # Calculate the request time in milliseconds
-        duration=$(( ($end_time - $start_time) / 1000000 ))
-        # Check if it's the fastest source
-        if [ "$duration" -lt "$min_latency" ]; then
+
+        # Calculate duration in milliseconds
+        duration=$(( (end_time - start_time) / 1000000 ))
+
+        # Check if this is the fastest source
+        if [[ "$duration" -lt "$min_latency" ]]; then
             min_latency="$duration"
             fastest_source="$url"
         fi
     done
-    echo $fastest_source
+
+    echo "$fastest_source"
     set -e
 }
 
-function contains_chinese() {
-    for rustlist in `git diff origin/master --name-only | grep \.rs$ | tr '\n' ' '`
-    do
-        grep -Pn '[\p{Han}]' $rustlist  && echo "DO NOT USE CHANESE CHARACTERS in code, 不要在源码中使用中文!" && exit 1
+# Check for Chinese characters in Rust source files
+contains_chinese() {
+    local rust_files
+
+    # Handle case where origin/master doesn't exist
+    if ! git rev-parse --verify origin/master &>/dev/null; then
+        echo "Warning: origin/master not found, skipping Chinese character check" >&2
+        return 0
+    fi
+
+    # Read changed Rust files into array
+    readarray -t rust_files < <(git diff origin/master --name-only | grep '\.rs$')
+
+    # Check each file for Chinese characters
+    for file in "${rust_files[@]}"; do
+        [[ -f "$file" ]] || continue
+        # Use PCRE for Chinese detection
+        if grep -Pn '[\p{Han}]' "$file" 2>/dev/null; then
+            echo "Error: Chinese characters found in $file" >&2
+            echo "DO NOT USE Chinese characters in source code!" >&2
+            return 1
+        fi
     done
-    true
+    return 0
 }
