@@ -105,7 +105,7 @@ impl Source for GarbageCollect {
             return 0;
         } else {
             /*
-             * Cleaning up idle wokers is asynchronous, thus when the
+             * Cleaning up idle workers is asynchronous, thus when the
              * idle worker killer raised, the workers is not cleaned
              * up right away. This will lead to the post event starting
              * another idle worker killer.

@@ -40,7 +40,7 @@ done
 
 install -Dm0640 -t ${sysmaster_install_target}/system ${run_with_vm_dir}/*.socket || exit 1
 
-# Simulate `sctl enable` command to automatically start services after bootup.
+# Simulate `sctl enable` command to automatically start services after boot up.
 mkdir -p /etc/sysmaster/system/multi-user.target.wants
 mkdir -p /etc/sysmaster/system/sysinit.target.wants
 mkdir -p /etc/sysmaster/system/syslog.target.wants

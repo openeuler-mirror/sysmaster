@@ -1,19 +1,43 @@
 #!/usr/bin/env bash
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $SCRIPT_DIR/common_function
+# Check if new dependencies are allowed
+set -euo pipefail
 
-#获取allow crates
-ALLOWED_CRATES=$(cat $SCRIPT_DIR/crates.allow | grep -e "^-" | cut -d ':' -f 1 | cut -d '-' -f 2)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ALLOW_FILE="$SCRIPT_DIR/crates.allow"
 
-# 提取Cargo.lock中新增的依赖项
-DEPS=$(git diff origin/master --name-only | grep \.lock$ | xargs -i git diff {} | grep -e "^+name =" | cut -d '=' -f 2)
+echo "==> Checking if new dependencies are allowed..."
 
-# 检查每个依赖项
-for DEP in $DEPS; do
-    if ! grep -q "^$DEP$" <<< "$ALLOWED_CRATES"; then
-        echo "非法crate被发现: $DEP"
+# Get list of allowed crates from crates.allow file
+if [[ ! -f "$ALLOW_FILE" ]]; then
+    echo "Error: crates.allow file not found at $ALLOW_FILE" >&2
+    exit 1
+fi
+
+ALLOWED_CRATES=$(grep -e "^-" "$ALLOW_FILE" | cut -d ':' -f 1 | cut -d '-' -f 2)
+
+# Get new dependencies from Cargo.lock changes
+# Handle case where origin/master doesn't exist
+if ! git rev-parse --verify origin/master &>/dev/null; then
+    echo "Warning: origin/master not found, skipping dependency check" >&2
+    exit 0
+fi
+
+LOCK_FILES=()
+readarray -t LOCK_FILES < <(git diff origin/master --name-only | grep '\.lock$')
+
+DEPS=()
+for lock_file in "${LOCK_FILES[@]}"; do
+    while IFS= read -r dep; do
+        DEPS+=("$dep")
+    done < <(git diff "$lock_file" | grep -e "^+name =" | cut -d '=' -f 2 | xargs)
+done
+
+# Check each dependency against allowed list
+for dep in "${DEPS[@]}"; do
+    if ! grep -q "^$dep$" <<< "$ALLOWED_CRATES"; then
+        echo "Error: Disallowed crate found: $dep" >&2
         exit 1
     fi
 done
 
-echo "所有依赖项都是允许的。"
+echo "==> All dependencies are allowed."
